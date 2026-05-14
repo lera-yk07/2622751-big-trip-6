@@ -1,28 +1,76 @@
 import AbstractView from './abstract-view.js';
 
+const getDuration = (dateFrom, dateTo) => {
+  const diff = new Date(dateTo) - new Date(dateFrom);
+  const hours = Math.floor(diff / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
+};
+
+const getFormattedDate = (date) => {
+  const d = new Date(date);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+};
+
 export default class PointView extends AbstractView {
+  constructor(waypoint, destination, offers) {
+    super();
+    this._waypoint = waypoint;
+    this._destination = destination;
+    this._offers = offers;
+  }
+
   getTemplate() {
+    const { type, dateFrom, dateTo, basePrice, isFavorite } = this._waypoint;
+    const { name: destinationName } = this._destination;
+    
+    const startDate = new Date(dateFrom);
+    const endDate = new Date(dateTo);
+    
+    const formattedDate = getFormattedDate(dateFrom);
+    const startTime = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const endTime = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const duration = getDuration(dateFrom, dateTo);
+
+    const offersHtml = this._offers.slice(0, 2).map(offer => `
+      <li class="event__offer">
+        <span class="event__offer-title">${offer.title}</span>
+        +€${offer.price}
+      </li>
+    `).join('');
+
+    const favoriteClass = isFavorite ? 'event__favorite-btn--active' : '';
+
     return `
       <div class="event">
-        <time class="event__date" datetime="2019-03-18">MAR 18</time>
+        <time class="event__date" datetime="${dateFrom}">${formattedDate}</time>
         <div class="event__type">
-          <img class="event__type-icon" width="42" height="42" src="img/icons/taxi.png" alt="Event type icon">
+          <img class="event__type-icon" width="42" height="42" src="img/icons/${type}.png" alt="Event type icon">
         </div>
         <div class="event__details">
           <div class="event__topic">
-            <h3 class="event__title">Taxi to Airport</h3>
+            <h3 class="event__title">${type} to ${destinationName}</h3>
           </div>
           <div class="event__schedule">
-            <p class="event__time">10:30 — 11:30</p>
+            <p class="event__time">
+              <time class="event__start-time" datetime="${dateFrom}">${startTime}</time>
+              &nbsp;—&nbsp;
+              <time class="event__end-time" datetime="${dateTo}">${endTime}</time>
+            </p>
+            <p class="event__duration">${duration}</p>
           </div>
           <div class="event__price">
-            <p class="event__price-value">€ 20</p>
+            <p class="event__price-value">€ ${basePrice}</p>
           </div>
+          <h4 class="visually-hidden">Offers:</h4>
+          <ul class="event__selected-offers">
+            ${offersHtml}
+          </ul>
         </div>
-        <button class="event__favorite-btn event__favorite-btn--active" type="button">
+        <button class="event__favorite-btn ${favoriteClass}" type="button">
           <span class="visually-hidden">Add to favorite</span>
           <svg class="event__favorite-icon" width="28" height="28" viewBox="0 0 28 28">
-            <path d="M14 21l-8.228 4.326 1.572-9.163L1 10.674l9.114-1.324L14 1l3.886 8.35L27 10.674l-6.344 5.489 1.572 9.163L14 21z"/>
+            <path d="M14 21l-8.228 4.326 1.572-9.162L.5 9.674l9.114-1.324L14 .5l4.386 7.85 9.114 1.324-6.844 6.49 1.572 9.162z"/>
           </svg>
         </button>
         <button class="event__rollup-btn" type="button">
