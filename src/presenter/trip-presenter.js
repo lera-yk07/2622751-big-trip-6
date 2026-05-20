@@ -2,6 +2,7 @@ import FiltersView from '../view/filters-view.js';
 import SortView from '../view/sort-view.js';
 import PointView from '../view/point-view.js';
 import EditFormView from '../view/edit-form-view.js';
+import EmptyListView from '../view/empty-list-view.js';
 import { render, replace, remove, RenderPosition } from '../framework/render.js';
 
 export default class TripPresenter {
@@ -10,30 +11,42 @@ export default class TripPresenter {
     this.tripModel = tripModel;
     this.filtersComponent = null;
     this.sortComponent = null;
-    this.pointComponents = new Map(); // храним компоненты точек
-    this.currentEditForm = null; // текущая открытая форма редактирования
+    this.emptyListComponent = null;
+    this.pointComponents = new Map();
+    this.currentEditForm = null;
   }
 
   init() {
     this.renderFilters();
-    this.renderSort();
     this.renderTripEvents();
   }
 
   renderFilters() {
-    this.filtersComponent = new FiltersView();
+    const filters = this.tripModel.getFilters();
+    this.filtersComponent = new FiltersView(filters, (filterType) => {
+      this.tripModel.setFilter(filterType);
+      this.renderTripEvents();
+    });
+    
     const filtersContainer = document.querySelector('.trip-controls__filters');
     if (filtersContainer) {
       filtersContainer.innerHTML = '';
       render(this.filtersComponent, filtersContainer);
     }
+    this.filtersComponent.setFilterChangeHandler();
   }
 
   renderSort() {
-    this.sortComponent = new SortView();
+    const sortItems = this.tripModel.getSort();
+    this.sortComponent = new SortView(sortItems, (sortType) => {
+      this.tripModel.setSort(sortType);
+      this.renderTripEvents();
+    });
+    
     const sortContainer = document.querySelector('.trip-events');
-    if (sortContainer) {
+    if (sortContainer && this.sortComponent) {
       render(this.sortComponent, sortContainer, RenderPosition.AFTERBEGIN);
+      this.sortComponent.setSortChangeHandler();
     }
   }
 
@@ -41,22 +54,29 @@ export default class TripPresenter {
     const pointsContainer = document.querySelector('.trip-events');
     if (!pointsContainer) return;
 
-    // Очищаем контейнер, но оставляем сортировку
-    const sortElement = this.sortComponent?.element;
+    // Очищаем контейнер
     pointsContainer.innerHTML = '';
-    if (sortElement) {
-      pointsContainer.appendChild(sortElement);
-    }
 
     const waypoints = this.tripModel.getWaypoints();
     
-    if (waypoints.length === 0) return;
+    // Если нет точек маршрута, показываем сообщение
+    if (waypoints.length === 0) {
+      this.renderEmptyList(pointsContainer);
+      return;
+    }
 
-    // Отрисовываем только точки маршрута (без формы редактирования)
-    const waypointsToShow = waypoints.slice(0, 3);
-    waypointsToShow.forEach((waypoint) => {
+    // Отрисовываем сортировку
+    this.renderSort();
+
+    // Отрисовываем все точки маршрута
+    waypoints.forEach((waypoint) => {
       this.renderPoint(waypoint, pointsContainer);
     });
+  }
+
+  renderEmptyList(container) {
+    this.emptyListComponent = new EmptyListView();
+    render(this.emptyListComponent, container);
   }
 
   renderPoint(waypoint, container) {
@@ -76,7 +96,6 @@ export default class TripPresenter {
   }
 
   replacePointToEditForm(waypoint, destination, offers, pointComponent, container) {
-    // Если уже открыта какая-то форма, закрываем её
     if (this.currentEditForm) {
       this.closeEditForm();
     }
@@ -95,7 +114,6 @@ export default class TripPresenter {
     editForm.setFormSubmitHandler();
     editForm.setCancelClickHandler();
     
-    // Добавляем обработчик на Esc
     this._handleEscKeyDown = this._handleEscKeyDown.bind(this, editForm, pointComponent, waypoint, destination, offers, container);
     document.addEventListener('keydown', this._handleEscKeyDown);
   }
@@ -106,7 +124,6 @@ export default class TripPresenter {
     replace(pointComponent, editForm);
     this.currentEditForm = null;
     
-    // Удаляем обработчик Esc
     if (this._handleEscKeyDown) {
       document.removeEventListener('keydown', this._handleEscKeyDown);
     }
