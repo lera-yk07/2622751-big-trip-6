@@ -1,9 +1,10 @@
+// src/presenter/trip-presenter.js
+
 import FiltersView from '../view/filters-view.js';
 import SortView from '../view/sort-view.js';
-import PointView from '../view/point-view.js';
-import EditFormView from '../view/edit-form-view.js';
 import EmptyListView from '../view/empty-list-view.js';
-import { render, replace, RenderPosition } from '../framework/render.js';
+import PointPresenter from './point-presenter.js';
+import { render, RenderPosition } from '../framework/render.js';
 
 export default class TripPresenter {
   constructor(container, tripModel) {
@@ -12,8 +13,8 @@ export default class TripPresenter {
     this.filtersComponent = null;
     this.sortComponent = null;
     this.emptyListComponent = null;
-    this.pointComponents = new Map();
-    this.currentEditForm = null;
+    this.pointPresenters = [];
+    this.currentSortComponent = null;
   }
 
   init() {
@@ -44,29 +45,42 @@ export default class TripPresenter {
     });
 
     const sortContainer = document.querySelector('.trip-events');
-    if (sortContainer && this.sortComponent) {
+    if (sortContainer) {
+      if (this.currentSortComponent) {
+        this.currentSortComponent.element.remove();
+      }
       render(this.sortComponent, sortContainer, RenderPosition.AFTERBEGIN);
+      this.currentSortComponent = this.sortComponent;
       this.sortComponent.setSortChangeHandler();
     }
   }
 
   renderTripEvents() {
     const pointsContainer = document.querySelector('.trip-events');
-    if (!pointsContainer) {
-      return;
-    }
-
-    pointsContainer.innerHTML = '';
+    if (!pointsContainer) return;
 
     const waypoints = this.tripModel.getWaypoints();
+
+    // Уничтожаем старые презентеры
+    this.pointPresenters.forEach(presenter => {
+      if (presenter.destroy) {
+        presenter.destroy();
+      }
+    });
+    this.pointPresenters = [];
+
+    // Очищаем контейнер
+    pointsContainer.innerHTML = '';
 
     if (waypoints.length === 0) {
       this.renderEmptyList(pointsContainer);
       return;
     }
 
+    // Отрисовываем сортировку
     this.renderSort();
 
+    // Создаём новые презентеры для каждой точки
     waypoints.forEach((waypoint) => {
       this.renderPoint(waypoint, pointsContainer);
     });
@@ -80,69 +94,43 @@ export default class TripPresenter {
   renderPoint(waypoint, container) {
     const destination = this.tripModel.getDestinationById(waypoint.destinationId);
     const offers = this.tripModel.getOffersForWaypoint(waypoint.id);
-
-    const pointComponent = new PointView(
-      waypoint,
-      destination,
-      offers,
-      () => this.replacePointToEditForm(waypoint, destination, offers, pointComponent, container)
+    
+    const pointPresenter = new PointPresenter(
+      container,
+      this.handleWaypointChange.bind(this),
+      () => this.handleModeChange()
     );
-
-    render(pointComponent, container);
-    pointComponent.setEditClickHandler();
-    this.pointComponents.set(waypoint.id, pointComponent);
+    
+    pointPresenter.init(waypoint, destination, offers);
+    this.pointPresenters.push(pointPresenter);
   }
 
-  replacePointToEditForm(waypoint, destination, offers, pointComponent) {
-    if (this.currentEditForm) {
-      this.closeEditForm();
-    }
-
-    const editForm = new EditFormView(
-      waypoint,
-      destination,
-      offers,
-      () => this.replaceEditFormToPoint(editForm, pointComponent),
-      () => this.replaceEditFormToPoint(editForm, pointComponent)
-    );
-
-    replace(editForm, pointComponent);
-    this.currentEditForm = editForm;
-
-    editForm.setFormSubmitHandler();
-    editForm.setCancelClickHandler();
-
-    this._handleEscKeyDown = this._handleEscKeyDown.bind(this, editForm, pointComponent);
-    document.addEventListener('keydown', this._handleEscKeyDown);
+  handleWaypointChange(updatedWaypoint) {
+  // Обновляем данные в модели
+  const waypoints = this.tripModel.getWaypoints();
+  const index = waypoints.findIndex(waypoint => waypoint.id === updatedWaypoint.id);
+  
+  if (index !== -1) {
+    waypoints[index] = updatedWaypoint;
   }
-
-  replaceEditFormToPoint(editForm, pointComponent) {
-    if (!editForm || !pointComponent) {
-      return;
-    }
-
-    replace(pointComponent, editForm);
-    this.currentEditForm = null;
-
-    if (this._handleEscKeyDown) {
-      document.removeEventListener('keydown', this._handleEscKeyDown);
-    }
+  
+  // Находим презентер для обновлённой точки и обновляем его
+  const pointPresenter = this.pointPresenters[index];
+  if (pointPresenter) {
+    const destination = this.tripModel.getDestinationById(updatedWaypoint.destinationId);
+    const offers = this.tripModel.getOffersForWaypoint(updatedWaypoint.id);
+    
+    // Обновляем презентер с новыми данными
+    pointPresenter.update(updatedWaypoint, destination, offers);
   }
+}
 
-  closeEditForm() {
-    if (this.currentEditForm) {
-      this.currentEditForm.element.remove();
-      this.currentEditForm = null;
-      if (this._handleEscKeyDown) {
-        document.removeEventListener('keydown', this._handleEscKeyDown);
+  handleModeChange() {
+    // Закрываем все открытые формы
+    this.pointPresenters.forEach(presenter => {
+      if (presenter && typeof presenter.resetView === 'function') {
+        presenter.resetView();
       }
-    }
-  }
-
-  _handleEscKeyDown(editForm, pointComponent, evt) {
-    if (evt.key === 'Escape' || evt.key === 'Esc') {
-      evt.preventDefault();
-      this.replaceEditFormToPoint(editForm, pointComponent);
-    }
+    });
   }
 }
