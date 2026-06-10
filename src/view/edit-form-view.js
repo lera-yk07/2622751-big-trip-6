@@ -19,7 +19,8 @@ export default class EditFormView extends AbstractStatefulView {
   constructor(waypoint, destination, allOffers, onFormSubmit, onCancelClick, onDeleteClick) {
     super();
     this._waypoint = waypoint;
-    this._destination = destination;
+    // Защита от undefined destination
+    this._destination = destination || { name: 'Unknown destination', description: '', pictures: [] };
     this._allOffers = allOffers || [];
     this._onFormSubmit = onFormSubmit;
     this._onCancelClick = onCancelClick;
@@ -49,8 +50,15 @@ export default class EditFormView extends AbstractStatefulView {
   }
 
   get template() {
+    // Защита от undefined
+    if (!this._destination) {
+      this._destination = { name: 'Unknown destination', description: '', pictures: [] };
+    }
+    
     const { type, dateFrom, dateTo, basePrice, selectedOfferIds } = this._state;
-    const { name: destinationName, description, pictures } = this._destination;
+    const destinationName = this._destination.name || 'Unknown destination';
+    const description = this._destination.description || '';
+    const pictures = this._destination.pictures || [];
     
     const startDate = dateFrom ? dayjs(dateFrom).format('YYYY-MM-DDTHH:mm') : '';
     const endDate = dateTo ? dayjs(dateTo).format('YYYY-MM-DDTHH:mm') : '';
@@ -77,7 +85,7 @@ export default class EditFormView extends AbstractStatefulView {
 
     const photosHtml = pictures && pictures.length > 0 
       ? pictures.map(picture => `
-          <img class="event__photo" src="${picture.src}" alt="${picture.description}">
+          <img class="event__photo" src="${picture.src}" alt="${picture.description || ''}">
         `).join('')
       : '<p>No photos available</p>';
 
@@ -363,12 +371,12 @@ export default class EditFormView extends AbstractStatefulView {
   }
 
   setDeleteClickHandler() {
-  const deleteBtn = this.element.querySelector('.event__delete-btn');
-  if (deleteBtn) {
-    deleteBtn.removeEventListener('click', this._handleDeleteClick);
-    deleteBtn.addEventListener('click', this._handleDeleteClick);
+    const deleteBtn = this.element.querySelector('.event__delete-btn');
+    if (deleteBtn) {
+      deleteBtn.removeEventListener('click', this._handleDeleteClick);
+      deleteBtn.addEventListener('click', this._handleDeleteClick);
+    }
   }
-}
 
   updateElement(update) {
     super.updateElement(update);
