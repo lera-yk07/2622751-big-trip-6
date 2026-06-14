@@ -15,11 +15,12 @@ const WaypointType = {
   RESTAURANT: 'restaurant'
 };
 
+const MAX_PRICE = 100000;
+
 export default class EditFormView extends AbstractStatefulView {
   constructor(waypoint, destination, allOffers, onFormSubmit, onCancelClick, onDeleteClick) {
     super();
     this._waypoint = waypoint;
-    // Защита от undefined destination
     this._destination = destination || { name: 'Unknown destination', description: '', pictures: [] };
     this._allOffers = allOffers || [];
     this._onFormSubmit = onFormSubmit;
@@ -28,13 +29,18 @@ export default class EditFormView extends AbstractStatefulView {
     this._datepickerFrom = null;
     this._datepickerTo = null;
     
+    const validInitialOffers = (waypoint.optionsIds || []).filter(offerId => {
+      const offer = this._allOffers.find(o => o.id === offerId);
+      return offer && offer.type === waypoint.type;
+    });
+    
     this._setState({
       type: waypoint.type,
       destinationId: waypoint.destinationId,
       dateFrom: waypoint.dateFrom,
       dateTo: waypoint.dateTo,
       basePrice: waypoint.basePrice,
-      selectedOfferIds: [...(waypoint.optionsIds || [])],
+      selectedOfferIds: validInitialOffers,
       isFavorite: waypoint.isFavorite
     });
     
@@ -50,7 +56,6 @@ export default class EditFormView extends AbstractStatefulView {
   }
 
   get template() {
-    // Защита от undefined
     if (!this._destination) {
       this._destination = { name: 'Unknown destination', description: '', pictures: [] };
     }
@@ -64,9 +69,11 @@ export default class EditFormView extends AbstractStatefulView {
     const endDate = dateTo ? dayjs(dateTo).format('YYYY-MM-DDTHH:mm') : '';
     
     const isDateValid = dateFrom && dateTo && new Date(dateFrom) <= new Date(dateTo);
-    const isPriceValid = basePrice >= 1;
+    const isPriceValid = basePrice >= 1 && basePrice <= MAX_PRICE;
     
-    const offersHtml = this._allOffers.map(offer => `
+    const filteredOffers = this._allOffers.filter(offer => offer.type === type);
+    
+    const offersHtml = filteredOffers.map(offer => `
       <div class="event__offer-selector">
         <input 
           class="event__offer-checkbox visually-hidden" 
@@ -179,22 +186,46 @@ export default class EditFormView extends AbstractStatefulView {
     const endDateInput = this.element.querySelector('[data-end-date]');
     const offerCheckboxes = this.element.querySelectorAll('.event__offer-checkbox:checked');
     
+    const currentType = typeSelect ? typeSelect.value : this._state.type;
+    
+    let price = priceInput ? (parseInt(priceInput.value, 10) || 1) : this._state.basePrice;
+    if (price < 1) {
+      price = 1;
+    }
+    
+    const selectedOfferIds = Array.from(offerCheckboxes).map(cb => cb.value);
+    
     return {
-      type: typeSelect ? typeSelect.value : this._state.type,
+      type: currentType,
       destinationId: this._state.destinationId,
       dateFrom: startDateInput && startDateInput.value ? new Date(startDateInput.value).toISOString() : this._state.dateFrom,
       dateTo: endDateInput && endDateInput.value ? new Date(endDateInput.value).toISOString() : this._state.dateTo,
-      basePrice: priceInput ? (parseInt(priceInput.value, 10) || 1) : this._state.basePrice,
-      selectedOfferIds: Array.from(offerCheckboxes).map(cb => cb.value),
+      basePrice: price,
+      selectedOfferIds: selectedOfferIds,
       isFavorite: this._state.isFavorite
     };
   }
 
-  _handleFormSubmit(evt) {
-    evt.preventDefault();
-    const formData = this._getFormData();
-    this._onFormSubmit(formData);
+ _handleFormSubmit(evt) {
+  evt.preventDefault();
+  
+  const priceInput = this.element.querySelector('[data-price-input]');
+  const rawPrice = parseInt(priceInput.value, 10);
+  
+  if (rawPrice > MAX_PRICE) {
+    const form = this.element.querySelector('form');
+    if (form) {
+      form.style.animation = 'shake 0.5s ease-in-out';
+      setTimeout(() => {
+        form.style.animation = '';
+      }, 500);
+    }
+    return;
   }
+  
+  const formData = this._getFormData();
+  this._onFormSubmit(formData);
+}
 
   _handleCancelClick(evt) {
     evt.preventDefault();
@@ -209,8 +240,9 @@ export default class EditFormView extends AbstractStatefulView {
   }
 
   _handleTypeChange(evt) {
+    const newType = evt.target.value;
     this.updateElement({
-      type: evt.target.value,
+      type: newType,
       selectedOfferIds: []
     });
   }
@@ -238,9 +270,13 @@ export default class EditFormView extends AbstractStatefulView {
 
   _handlePriceChange(evt) {
     let value = parseInt(evt.target.value, 10);
-    if (isNaN(value) || value < 1) {
+    if (isNaN(value)) {
       value = 1;
     }
+    if (value < 1) {
+      value = 1;
+    }
+    // НЕ ограничиваем цену, просто обновляем состояние
     this.updateElement({
       basePrice: value
     });
@@ -345,7 +381,8 @@ export default class EditFormView extends AbstractStatefulView {
     }
     
     if (offersContainer) {
-      offersContainer.querySelectorAll('.event__offer-checkbox').forEach(checkbox => {
+      const checkboxes = offersContainer.querySelectorAll('.event__offer-checkbox');
+      checkboxes.forEach(checkbox => {
         checkbox.removeEventListener('change', this._handleOfferChange);
         checkbox.addEventListener('change', this._handleOfferChange);
       });

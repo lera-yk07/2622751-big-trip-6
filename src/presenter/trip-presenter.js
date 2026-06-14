@@ -1,9 +1,8 @@
 import SortView from '../view/sort-view.js';
 import EmptyListView from '../view/empty-list-view.js';
+import LoadingView from '../view/loading-view.js';
 import PointPresenter from './point-presenter.js';
 import { render, RenderPosition } from '../framework/render.js';
-
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
 
 export default class TripPresenter {
   constructor(container, tripModel) {
@@ -11,6 +10,7 @@ export default class TripPresenter {
     this.tripModel = tripModel;
     this.sortComponent = null;
     this.emptyListComponent = null;
+    this.loadingComponent = null;
     this.pointPresenters = [];
     this.currentSortType = 'day';
     this.isNewPointMode = false;
@@ -48,7 +48,7 @@ export default class TripPresenter {
     const firstDestination = destinations[0];
     
     const newWaypoint = {
-      id: generateId(),
+      id: null,
       type: 'flight',
       destinationId: firstDestination.id,
       dateFrom: new Date().toISOString(),
@@ -70,13 +70,34 @@ export default class TripPresenter {
     
     const pointPresenter = new PointPresenter(
       pointsContainer,
-      (updatedWaypoint) => {
-        this.tripModel.addWaypoint(updatedWaypoint);
-        this.isNewPointMode = false;
+      async (updatedWaypoint, action) => {
+        let result;
+        if (action === 'create') {
+          result = await this.tripModel.createWaypoint(updatedWaypoint);
+          if (result.success) {
+            this.isNewPointMode = false;
+            this.renderTripEvents();
+          }
+        } else {
+          result = await this.tripModel.updateWaypoint(updatedWaypoint);
+        }
+        return result;
       },
       () => this.handleModeChange(),
-      (waypoint) => this.handleDeletePoint(waypoint),
+      async (waypoint) => {
+        const result = await this.tripModel.deleteWaypoint(waypoint.id);
+        if (result.success) {
+          this.isNewPointMode = false;
+          this.renderTripEvents();
+        }
+        return result;
+      },
       allOffers
+    );
+    
+    pointPresenter.setCallbacks(
+      (id) => this.tripModel.getDestinationById(id),
+      (id) => this.tripModel.getOffersForWaypoint(id)
     );
     
     pointPresenter.init(newWaypoint, newDestination, offers);
@@ -84,11 +105,6 @@ export default class TripPresenter {
     
     this.pointPresenters.push(pointPresenter);
     this.isNewPointMode = true;
-  }
-
-  handleDeletePoint(waypoint) {
-    this.tripModel.deleteWaypoint(waypoint.id);
-    this.isNewPointMode = false;
   }
 
   renderSort() {
@@ -124,6 +140,11 @@ export default class TripPresenter {
       pointsContainer.appendChild(sortElement);
     }
 
+    if (this.tripModel.isLoading()) {
+      this.renderLoading(pointsContainer);
+      return;
+    }
+
     const waypoints = this.tripModel.getWaypoints();
     const activeFilter = this.tripModel.getActiveFilter();
     const filter = this.tripModel.getFilters().find(f => f.type === activeFilter);
@@ -143,6 +164,11 @@ export default class TripPresenter {
     });
   }
 
+  renderLoading(container) {
+    this.loadingComponent = new LoadingView();
+    render(this.loadingComponent, container);
+  }
+
   renderEmptyList(container, message) {
     this.emptyListComponent = new EmptyListView(message);
     render(this.emptyListComponent, container);
@@ -155,15 +181,24 @@ export default class TripPresenter {
     
     const pointPresenter = new PointPresenter(
       container,
-      (updatedWaypoint) => {
-        this.tripModel.updateWaypoint(updatedWaypoint);
-        if (this.isNewPointMode) {
-          this.isNewPointMode = false;
-        }
+      async (updatedWaypoint) => {
+        const result = await this.tripModel.updateWaypoint(updatedWaypoint);
+        return result;
       },
       () => this.handleModeChange(),
-      (waypoint) => this.handleDeletePoint(waypoint),
+      async (waypoint) => {
+        const result = await this.tripModel.deleteWaypoint(waypoint.id);
+        if (result.success) {
+          this.renderTripEvents();
+        }
+        return result;
+      },
       allOffers
+    );
+    
+    pointPresenter.setCallbacks(
+      (id) => this.tripModel.getDestinationById(id),
+      (id) => this.tripModel.getOffersForWaypoint(id)
     );
     
     pointPresenter.init(waypoint, destination, offers);

@@ -6,27 +6,19 @@ import Api from './api.js';
 const tripEventsSection = document.querySelector('.trip-events');
 const filtersContainer = document.querySelector('.trip-controls__filters');
 
-const USE_MOCKS = false;
+const api = new Api();
+const tripModel = new TripModel(api);
 
-let tripModel;
-let filtersPresenter;
-let tripPresenter;
+window.tripModel = tripModel;
 
-if (USE_MOCKS) {
-  tripModel = new TripModel();
-  filtersPresenter = new FiltersPresenter(filtersContainer, tripModel);
+const filtersPresenter = new FiltersPresenter(filtersContainer, tripModel);
+const tripPresenter = new TripPresenter(tripEventsSection, tripModel);
+
+tripModel.init().then(() => {
   filtersPresenter.init();
-  tripPresenter = new TripPresenter(tripEventsSection, tripModel);
   tripPresenter.init();
-} else {
-  const api = new Api();
-  tripModel = new TripModel(api);
-  
-  filtersPresenter = new FiltersPresenter(filtersContainer, tripModel);
-  tripPresenter = new TripPresenter(tripEventsSection, tripModel);
-  
-  tripModel.init().then(() => {
-    filtersPresenter.init();
-    tripPresenter.init();
-  });
-}
+  console.log('App initialized with', tripModel._waypoints.length, 'points');
+  console.log('All offers count:', tripModel._allOffers.length);
+}).catch(error => {
+  console.error('Failed to load data:', error);
+});

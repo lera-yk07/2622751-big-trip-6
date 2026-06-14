@@ -40,9 +40,7 @@ export default class PointView extends AbstractView {
     super();
     this._waypoint = waypoint;
     
-    // Защита от undefined destination
     if (!destination || typeof destination !== 'object') {
-      console.warn('PointView: destination is undefined, using default', { waypoint, destination });
       this._destination = { ...DEFAULT_DESTINATION };
     } else {
       this._destination = {
@@ -60,7 +58,6 @@ export default class PointView extends AbstractView {
   }
 
   get template() {
-    // Дополнительная проверка в шаблоне
     let destination = this._destination;
     if (!destination || typeof destination !== 'object') {
       destination = { ...DEFAULT_DESTINATION };
@@ -72,9 +69,9 @@ export default class PointView extends AbstractView {
     const formattedDate = getFormattedDate(dateFrom);
     const startTime = getFormattedTime(dateFrom);
     const endTime = getFormattedTime(dateTo);
-    const duration = getDuration(dateFrom, dateTo);
+    const durationTime = getDuration(dateFrom, dateTo);
 
-    const offersHtml = this._offers.slice(0, 2).map(offer => `
+    const offersHtml = this._offers.slice(0, 3).map(offer => `
       <li class="event__offer">
         <span class="event__offer-title">${offer.title}</span>
         +€${offer.price}
@@ -87,35 +84,37 @@ export default class PointView extends AbstractView {
       <li class="trip-events__item">
         <div class="event">
           <time class="event__date" datetime="${dateFrom}">${formattedDate}</time>
+          
           <div class="event__type">
             <img class="event__type-icon" width="42" height="42" src="img/icons/${type}.png" alt="Event type icon">
           </div>
-          <div class="event__details">
-            <div class="event__topic">
-              <h3 class="event__title">${type} to ${this._escapeHtml(destinationName)}</h3>
-            </div>
-            <div class="event__schedule">
-              <p class="event__time">
-                <time class="event__start-time" datetime="${dateFrom}">${startTime}</time>
-                &nbsp;—&nbsp;
-                <time class="event__end-time" datetime="${dateTo}">${endTime}</time>
-              </p>
-              <p class="event__duration">${duration}</p>
-            </div>
-            <div class="event__price">
-              <p class="event__price-value">€ ${basePrice}</p>
-            </div>
-            <h4 class="visually-hidden">Offers:</h4>
-            <ul class="event__selected-offers">
-              ${offersHtml}
-            </ul>
+          
+          <div class="event__title">${type} to ${this._escapeHtml(destinationName)}</div>
+          
+          <div class="event__schedule">
+            <p class="event__time">
+              <time class="event__start-time" datetime="${dateFrom}">${startTime}</time>
+              &nbsp;—&nbsp;
+              <time class="event__end-time" datetime="${dateTo}">${endTime}</time>
+            </p>
+            <p class="event__duration">${durationTime}</p>
           </div>
+          
+          <div class="event__price">
+            € ${basePrice}
+          </div>
+          
+          <ul class="event__selected-offers">
+            ${offersHtml}
+          </ul>
+          
           <button class="event__favorite-btn ${favoriteClass}" type="button">
             <span class="visually-hidden">Add to favorite</span>
             <svg class="event__favorite-icon" width="28" height="28" viewBox="0 0 28 28">
               <path d="M14 21l-8.228 4.326 1.572-9.162L.5 9.674l9.114-1.324L14 .5l4.386 7.85 9.114 1.324-6.844 6.49 1.572 9.162z"/>
             </svg>
           </button>
+          
           <button class="event__rollup-btn" type="button">
             <span class="visually-hidden">Open event details</span>
           </button>
